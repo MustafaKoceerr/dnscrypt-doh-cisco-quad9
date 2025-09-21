@@ -1,109 +1,131 @@
-# dnscrypt-opendns-quad9
+# dnscrypt-doh-cisco-quad9
 
-Hızlı ve tutarlı **DoH (DNS over HTTPS)** çözümlemesi için **Cisco/OpenDNS (primary)** + **Quad9 (fallback)** ayarlı, dağıtım-agnostik bir `dnscrypt-proxy` yapılandırması.  
-Amaç: **düşük gecikme**, **failover**, **kolay kurulum** ve **her Wi‑Fi’de global olarak** çalışması.
+🔒 **Güvenli ve hızlı DNS çözümleme:** Cisco OpenDNS DoH (IPv4 + IPv6)
+**öncelikli**, Quad9 DoH **otomatik fallback**.\
+Bu repo, `dnscrypt-proxy` ile hem IPv4 hem IPv6 üzerinde güvenli DoH
+çözümleme ayarlarını ve kurulum scriptlerini içerir.
 
-> Test ortamı: Fedora 42 + NetworkManager. Ubuntu/Debian/Arch/Fedora için kurulum adımları yer alır.
+------------------------------------------------------------------------
 
----
+## 📦 Proje Yapısı
 
-## İçerik
+    dnscrypt-doh-cisco-quad9/
+    ├─ config/
+    │  └─ dnscrypt-proxy.toml     # Cisco + Quad9 DoH yapılandırması (hazır)
+    ├─ scripts/
+    │  ├─ install.sh              # Kurulum, servis enable + resolv.conf sabitleme
+    │  ├─ rollback.sh             # Orijinal duruma geri alma
+    │  ├─ test-fallback.sh        # Cisco engelle → Quad9 fallback test
+    │  └─ verify.sh               # DoH/IPv6 test & DNS sızıntı kontrolü
+    ├─ LICENSE
+    └─ README.md
 
-- `configs/dnscrypt-proxy.toml` — Çalışan örnek TOML (Cisco DoH v4/v6 ana, Quad9 DoH v4/v6 yedek).
-- `install.sh` — Otomatik kurulum (root/sudo ile tek adım).
-- `linux/setup.sh` — Etkileşimli kurulum/ince ayar sihirbazı.
-- `tools/dnscrypt-on.sh` — Global DoH’i aç.
-- `tools/dnscrypt-off.sh` — Global DoH’i kapat (DHCP DNS’e dön).
-- `tools/dnscrypt-status.sh` — Hızlı durum kontrolü.
-- `tools/dnscrypt-switch.sh` — Cisco ↔︎ Quad9 hızlı geçiş.
+------------------------------------------------------------------------
 
-> **Not:** Bu repo sistem genelinde (`/etc/resolv.conf`) DNS’i `127.0.2.1`’e yönlendirir; böylece **tüm Wi‑Fi/ethernet profillerinde** aynı ayarlar kullanılmaya devam eder.
+## 🚀 Kurulum
 
----
+### 1️⃣ Adım --- Repo'yu Klonla
 
-## Hızlı Başlangıç
-
-```bash
-# 1) İndir ve içeriğine gir
-git clone https://github.com/USER/dnscrypt-opendns-quad9.git
-cd dnscrypt-opendns-quad9
-
-# 2) Kur (paketleri yükler, configi kopyalar, global DNS'i 127.0.2.1 yapar)
-sudo bash install.sh
-
-# 3) Durum kontrolü
-sudo tools/dnscrypt-status.sh
+``` bash
+git clone https://github.com/MustafaKoceerr/dnscrypt-doh-cisco-quad9.git
+cd dnscrypt-doh-cisco-quad9
 ```
 
----
+### 2️⃣ Adım --- Scriptleri Çalıştır
 
-## Failover Mantığı
+> İlk çalıştırmada sudo şifresi istenir.
 
-- **Primary:** Cisco OpenDNS DoH (IPv4 + IPv6)
-- **Fallback:** Quad9 DoH (IPv4 + IPv6)
-- `dnscrypt-proxy` en düşük RTT’li erişilebilir sunucuyu seçer. Cisco/Quad9 erişilemez olduğunda otomatik olarak diğerine geçer.
-- İstersen **Cisco’yu zorunlu öncelik** yapmak için `server_names` sırasını yalnızca `['cisco-doh-ip4','cisco-doh-ip6']` olarak bırakıp Quad9’u geçici olarak çıkarabilir veya testte tekrar dahil edebilirsin.
-
----
-
-## Doğrulama Komutları
-
-```bash
-# Etkin sunucular ve gecikme
-sudo journalctl -u dnscrypt-proxy -n 40 --no-pager | grep -E "(DoH)|lowest initial latency"
-
-# Quad9/Cisco üzerinden doğrudan test (DoH bağlantıları)
-ss -ntp | grep -E '(9\.9\.9\.10:443|\[2620:fe::10\]:443|208\.67\.222\.222:443|\[2620:119:35::35\]:443)' || echo "Aktif DoH TLS yok"
-
-# IPv4/IPv6 çözümleme
-dig @127.0.2.1 example.com A +short
-dig @127.0.2.1 example.com AAAA +short
+``` bash
+chmod +x scripts/*.sh
+sudo ./scripts/install.sh
 ```
 
----
+Kurulum tamamlandıktan sonra `dnscrypt-proxy` servisiniz aktif
+olacaktır.\
+Bütün DNS istekleriniz artık **Cisco DoH** üzerinden, hata durumunda ise
+**Quad9 DoH** üzerinden çözülecektir.
 
-## Sık Karşılaşılan Hatalar & Çözümler
+------------------------------------------------------------------------
 
-### 1) `No servers configured` / `Invalid stamp`
-- Çoğunlukla hatalı `server_names` veya bozuk static `stamp` tanımlarından olur.  
-  **Çözüm:** Bu repodaki `configs/dnscrypt-proxy.toml` dosyasını **aynen** kullan. Static `[static.'...']` bölümleri **yok**; çözücüler `public-resolvers.md` üzerinden **ad** ile seçiliyor.
-- Cache’i temizle: `sudo rm -f /var/cache/dnscrypt-proxy/*.md && sudo systemctl restart dnscrypt-proxy`
+## ✅ Doğrulama
 
-### 2) `resolv.conf` yazılamıyor / NetworkManager DNS’i geri alıyor
-- `/etc/resolv.conf` bir symlink olabilir veya immutable olabilir.
-- **Çözüm (scriptler zaten yapar):**
-  ```bash
-  sudo chattr -i /etc/resolv.conf 2>/dev/null || true
-  sudo rm -f /etc/resolv.conf
-  echo "nameserver 127.0.2.1" | sudo tee /etc/resolv.conf >/dev/null
-  sudo chmod 644 /etc/resolv.conf
-  sudo chattr +i /etc/resolv.conf
-  # NetworkManager’ın dokunmaması için:
-  sudo mkdir -p /etc/NetworkManager/conf.d
-  printf "[main]\ndns=none\n" | sudo tee /etc/NetworkManager/conf.d/00-dns.conf >/dev/null
-  sudo systemctl restart NetworkManager
-  ```
+Kurulumdan sonra şu komut ile test edebilirsin:
 
-### 3) `systemd-resolved` çakışmaları
-- Ubuntu/Fedora’da `systemd-resolved` aktifse, stub resolver çakışması yaşanabilir.
-- **Çözüm:** `sudo systemctl disable --now systemd-resolved` (gerekirse tekrar aktifleştirilebilir).
+``` bash
+./scripts/verify.sh
+```
 
-### 4) IPv6’da çözüm gelmiyor
-- ISP IPv6’ı kırpıyor olabilir ya da firewall engelliyordur.
-- **Kontrol:** `ping -6 google.com -c 3` ve `dig @127.0.2.1 cloudflare.com AAAA`  
-- **Geçici çözüm:** `ipv6_servers = false` yaparak yalnızca IPv4 ile çalıştır.
+Bu script: - Hangi resolver'ın seçildiğini loglardan okur - Aktif TLS
+bağlantılarını gösterir (`cisco-doh-ip4`, `quad9-doh-ip6` vs.) - Hem A
+hem AAAA sorgularını test eder - `resolver.dnscrypt.info` üzerinden
+hangi sunucu ile konuştuğunu doğrular
 
-### 5) DNS sızıntı testi beklenenden farklı ülke/AS gösteriyor
-- DoH son noktaları **Anycast** çalışır; en yakın POP’a yönlenirsin (ör. Amsterdam/Frankfurt). Bu normaldir ve çözümleme gecikmesini düşürür.
+------------------------------------------------------------------------
 
----
+## 🛠 Cisco → Quad9 Fallback Testi
 
-## Desteklenen Dağıtımlar
+Cisco'yu engelleyip Quad9'a geçişi gözlemlemek için:
 
-- **Fedora, Ubuntu/Debian, Arch** için `install.sh` gerekli paketleri kurar ve yapılandırır.
-- Diğer dağıtımlar da çalışır; `dnscrypt-proxy` paket adı farklı olabilir. Mantık aynı: servis kurulumu + `/etc/resolv.conf` → `127.0.2.1` + NetworkManager DNS override.
+``` bash
+./scripts/test-fallback.sh
+```
 
----
+> Test sonunda engelleme kuralları otomatik kaldırılır.
 
-## Lisans
-MIT
+------------------------------------------------------------------------
+
+## 🔄 Geri Alma
+
+Kurulumdan tamamen çıkmak veya sistem ayarlarını eski haline döndürmek
+için:
+
+``` bash
+sudo ./scripts/rollback.sh
+```
+
+------------------------------------------------------------------------
+
+## 🧠 Sık Karşılaşılan Hatalar
+
+  -----------------------------------------------------------------------------------------
+  Hata / Durum                                    Çözüm
+  ----------------------------------------------- -----------------------------------------
+  `No servers configured`                         `dnscrypt-proxy.toml` bozulmuş olabilir.
+                                                  `config/` klasöründeki orijinali tekrar
+                                                  kopyala ve servisi yeniden başlat.
+
+  `connection refused`                            Servis çalışmıyor olabilir.
+                                                  `sudo systemctl restart dnscrypt-proxy`
+                                                  ile yeniden başlat.
+
+  IPv6 sorguları yanıt vermiyor                   ISP IPv6'yı desteklemiyor olabilir.
+                                                  `config/dnscrypt-proxy.toml` içinde
+                                                  `ipv6_servers = false` yapabilirsin.
+
+  Cisco engellenmiş gözüküyor ama Quad9'a         `systemd-resolved` veya `NetworkManager`
+  geçmiyor                                        başka DNS kullanıyor olabilir.
+                                                  `install.sh` scripti resolv.conf'u
+                                                  kilitler, doğru çalıştığından emin ol.
+  -----------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+## 📜 Lisans
+
+Bu proje **MIT Lisansı** ile yayınlanmıştır.\
+Detaylar için [LICENSE](./LICENSE) dosyasına bakabilirsiniz.
+
+------------------------------------------------------------------------
+
+## 🌐 Bağlantılar
+
+-   📂 GitHub:
+    [dnscrypt-doh-cisco-quad9](https://github.com/MustafaKoceerr/dnscrypt-doh-cisco-quad9)
+-   📖 dnscrypt-proxy belgeleri:
+    <https://github.com/DNSCrypt/dnscrypt-proxy/wiki>
+
+------------------------------------------------------------------------
+
+💡 **Not:** Bu repo distro-bağımsızdır (Fedora, Ubuntu, Arch
+vs. üzerinde çalışır).\
+Sadece paket yöneticisi farklılık gösterir (`dnf`, `apt`, `pacman`).
