@@ -1,0 +1,14 @@
+# Editör/IDE
+.idea/
+.vscode/
+*.iml
+
+# Geçici dosyalar
+*.log
+*.bak
+*.swp
+*.swo
+
+# Derlenmiş/çıktı
+dist/
+build/

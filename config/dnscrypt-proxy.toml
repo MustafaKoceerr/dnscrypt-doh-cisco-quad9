@@ -1,0 +1,108 @@
+############################################
+# dnscrypt-proxy.toml — Cisco (OpenDNS) + Quad9 DoH (IPv4/IPv6)
+# Öncelik: Cisco (IP4/IP6) -> Quad9 (IP4/IP6, nofilter)
+############################################
+
+# Cisco’yu ana, Quad9’u yalnızca yedek olarak tutuyoruz
+server_names = [
+  'cisco-doh-ip4',
+  'cisco-doh-ip6',
+  'quad9-doh-ip4-nofilter-pri',
+  'quad9-doh-ip6-nofilter-pri'
+]
+
+# Yerel dinleme
+listen_addresses = ['127.0.2.1:53']
+max_clients = 250
+
+# Hem IPv4 hem IPv6 etkin
+ipv4_servers = true
+ipv6_servers = true
+
+# Yalnızca DoH
+doh_servers = true
+dnscrypt_servers = false
+odoh_servers = false
+
+# Eleme şartı koyma (aksi halde profil listeden düşebilir)
+require_dnssec   = false
+require_nolog    = false
+require_nofilter = false
+
+# Performans/TCP
+force_tcp = false
+http3     = false
+timeout   = 5000
+keepalive = 30
+
+# Sistem DNS’ini yok say
+ignore_system_dns = true
+
+# Bootstrap (bağımsız çözümleyiciler)
+netprobe_timeout = 60
+netprobe_address = '9.9.9.9:53'
+bootstrap_resolvers = [
+  '9.9.9.11:53',
+  '149.112.112.11:53',
+  '[2620:fe::9]:53',
+  '[2620:fe::fe]:53'
+]
+
+# Basit cache
+cache = true
+cache_size         = 4096
+cache_min_ttl      = 2400
+cache_max_ttl      = 86400
+cache_neg_min_ttl  = 60
+cache_neg_max_ttl  = 600
+
+use_syslog          = true
+log_files_max_size  = 10
+log_files_max_age   = 7
+log_files_max_backups = 1
+
+############################################
+# Statik Cisco/OpenDNS DoH
+#  - IPv4: 208.67.222.222
+#  - IPv6: 2620:119:35::35
+#  Host: doh.opendns.com  Path: /dns-query
+############################################
+[static.'cisco-doh-ip4']
+stamp = 'sdns://AgAAAAAAAAAADjIwOC42Ny4yMjIuMjIyAA9kb2gub3BlbmRucy5jb20KL2Rucy1xdWVyeQ'
+
+[static.'cisco-doh-ip6']
+stamp = 'sdns://AgAAAAAAAAAAEVsyNjIwOjExOTozNTo6MzVdAA9kb2gub3BlbmRucy5jb20KL2Rucy1xdWVyeQ'
+
+############################################
+# Statik Quad9 DoH (nofilter)
+#  - IPv4: 9.9.9.10         Host: dns10.quad9.net  Path: /dns-query
+#  - IPv6: 2620:fe::10      Host: dns10.quad9.net  Path: /dns-query
+############################################
+[static.'quad9-doh-ip4-nofilter-pri']
+stamp = 'sdns://AgYAAAAAAAAACDkuOS45LjEwILAZIHRLu3bJqwU-AeB7fgUORz0g95976kNfr-Q8nSQvE2RuczEwLnF1YWQ5Lm5ldDo0NDMKL2Rucy1xdWVyeQ'
+
+[static.'quad9-doh-ip6-nofilter-pri']
+stamp = 'sdns://AgYAAAAAAAAADVsyNjIwOmZlOjoxMF0gsBkgdEu7dsmrBT4B4Ht-BQ5HPSD3n3vqQ1-v5DydJC8TZG5zMTAucXVhZDkubmV0OjQ0MwovZG5zLXF1ZXJ5'
+
+############################################
+# Kaynak listeleri (statik kullanıyoruz; kalması sorun değil)
+############################################
+[sources.public-resolvers]
+urls = [
+  'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
+  'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md'
+]
+cache_file  = '/var/cache/dnscrypt-proxy/public-resolvers.md'
+minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+refresh_delay = 72
+prefix = ''
+
+[sources.relays]
+urls = [
+  'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md',
+  'https://download.dnscrypt.info/resolvers-list/v3/relays.md'
+]
+cache_file  = '/var/cache/dnscrypt-proxy/relays.md'
+minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+refresh_delay = 72
+prefix = ''
